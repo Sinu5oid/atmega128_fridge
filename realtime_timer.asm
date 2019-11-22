@@ -72,8 +72,7 @@ background:
 	sbrc flag_temp, 4			; F20
 		nop
 	sbrc flag_temp, 3			; F21
-		ldi temp2,	0x40		; 2-bit mask
-		call gen_light_en		; enable red lamp
+		call red_light_en
 	sbrc flag_temp, 2			; F22
 		nop
 	sbrc flag_temp, 1			; F23
@@ -141,15 +140,13 @@ background:
 	ldd flag_temp,	y+5
 ; analyze flag bytes
 	sbrc flag_temp,	7			; F41
-		ldi temp2,	0x01		; 0-bit mask
-		call gen_light_en		; enable cc light
+		call cc_light_en
 	sbrc flag_temp, 6			; PT10
 		nop
 	sbrc flag_temp, 5			; F42
 		call cc_mode_change_exp
 	sbrc flag_temp, 4			; F43
-		ldi temp2,	0x01		; 0-bit mask
-		call gen_light_en		; enable cc light
+		call cc_light_en
 	sbrc flag_temp, 3			; PT11
 		nop
 	sbrc flag_temp, 2			; F44
@@ -157,8 +154,7 @@ background:
 	sbrc flag_temp, 1			; PT12
 		nop
 	sbrc flag_temp, 0			; F45
-		ldi temp2,	0x01		; 0-bit mask
-		call gen_light_en		; enable cc light
+		call cc_light_en
 ; seventh flag byte fetch
 	ldd flag_temp,	y+6
 ; analyze flag bytes
@@ -167,8 +163,7 @@ background:
 	sbrc flag_temp, 6			; F46
 		call cc_hum_change_exp
 	sbrc flag_temp, 5			; F47
-		ldi temp2,	0x01		; 0-bit mask
-		call gen_light_en		; enable cc light
+		call cc_light_en
 	sbrc flag_temp, 4			; F48
 		call cc_pres_change_exp
 	sbrc flag_temp, 3			; F49
@@ -185,22 +180,19 @@ background:
 	sbrc flag_temp,	7			; F53
 		nop
 	sbrc flag_temp, 6			; F54
-		ldi temp2,	0x02		; 1-bit mask
-		call gen_light_en		; enable fc light
+		call fc_light_en
 	sbrc flag_temp, 5			; F55
 		call fc_mode_change_exp
 	sbrc flag_temp, 4			; PT14
 		nop
 	sbrc flag_temp, 3			; F56
-		ldi temp2,	0x02		; 1-bit mask
-		call gen_light_en		; enable fc light
+		call fc_light_en
 	sbrc flag_temp, 2			; F57
 		call fc_temp_change_exp
 	sbrc flag_temp, 1			; PT15
 		nop
 	sbrc flag_temp, 0			; F58
-		ldi temp2,	0x02		; 1-bit mask
-		call gen_light_en		; enable fc light
+		call fc_light_en
 ; ninth flag byte fetch
 	ldd flag_temp,	y+8
 ; analyze flag bytes
@@ -209,8 +201,7 @@ background:
 	sbrc flag_temp, 6			; PT16
 		nop
 	sbrc flag_temp, 5			; F60
-		ldi temp2,	0x02		; 1-bit mask
-		call gen_light_en		; enable fc light
+		call fc_light_en
 	sbrc flag_temp, 4			; F61
 		call fc_pres_change_exp
 	sbrc flag_temp, 3			; PT17
@@ -583,7 +574,7 @@ ac_2:cpi key_id,		0x02		; compare id with 2 (if CC temp select key has been pres
 	ori temp,			0x40		; set PT11 flag
 	std y+0,			temp		; store $10B flags
 	ret
-ac_3:cpi key_id,		0x03		; compare id with 3 (if CC * select key has been pressed)
+ac_3:cpi key_id,		0x03		; compare id with 3 (if CC humidity select key has been pressed)
 	brbc 1,				ac_4
 	clr key_id						; clear key id register (key_id = 0)
 	clr key_val						; clear key value register (key_value = 0)
@@ -601,7 +592,7 @@ ac_3:cpi key_id,		0x03		; compare id with 3 (if CC * select key has been pressed
 	ori temp,			0x20		; set PT12 flag
 	std y+11, 			temp		; store $10B flags
 	ret
-ac_4:cpi key_id,		0x04		; compare id with 4 (if CC * select key has been pressed)
+ac_4:cpi key_id,		0x04		; compare id with 4 (if CC pressure select key has been pressed)
 	brbc 1,				ac_5
 	clr key_id
 	clr key_val
@@ -619,7 +610,7 @@ ac_4:cpi key_id,		0x04		; compare id with 4 (if CC * select key has been pressed
 	ori temp,			0x10		; set PT13
 	std y+11, 			temp		; store $10B flags
 	ret
-ac_5:cpi key_id,		0x05		; compare id with 5 (if FC * select key has been pressed)
+ac_5:cpi key_id,		0x05		; compare id with 5 (if FC mode select key has been pressed)
 	brbc 1,				ac_6
 	clr key_id
 	clr key_val
@@ -637,7 +628,7 @@ ac_5:cpi key_id,		0x05		; compare id with 5 (if FC * select key has been pressed
 	ori temp,			0x08		; set PT14
 	std y+11, 			temp		; store $10B flags
 	ret
-ac_6:cpi key_id,		0x06		; compare id with 6 (if FC * select key has been pressed)
+ac_6:cpi key_id,		0x06		; compare id with 6 (if FC temperature select key has been pressed)
 	brbc 1,				ac_7
 	clr key_id
 	clr key_val
@@ -655,7 +646,7 @@ ac_6:cpi key_id,		0x06		; compare id with 6 (if FC * select key has been pressed
 	ori temp,			0x04		; set PT15
 	std y+11, 			temp		; store $10B flags
 	ret
-ac_7:cpi key_id,		0x07		; compare id with 7 (if FC * select key has been pressed)
+ac_7:cpi key_id,		0x07		; compare id with 7 (if FC humidity select key has been pressed)
 	brbc 1,				ac_8
 	clr key_id
 	clr key_val
@@ -673,7 +664,7 @@ ac_7:cpi key_id,		0x07		; compare id with 7 (if FC * select key has been pressed
 	ori temp,			0x02		; set PT15
 	std y+11,			temp		; store $10B flags
 	ret
-ac_8:cpi key_id,		0x08		; compare id with 8 (if FC * select key has been pressed)
+ac_8:cpi key_id,		0x08		; compare id with 8 (if FC pressure select key has been pressed)
 	brbc 1,				ac_9
 	clr key_id
 	clr key_val
@@ -697,49 +688,49 @@ ac_9:cpi key_id,		0x09		; compare id with 9 (if pause or number key has been pre
 ac_ac:ret
 	ret
 cc_mode_change_exp:					; cooling chamber mode change timer exceeded 		(F42)
-	; TODOcall cc_lights_dis
+	call cc_light_dis
 	ldd temp,			y+5			; fetch $105 flags
 	andi temp, 			0x7f		; clear F41 flag
 	std y+5,			temp		; store $105 flags
 	ret
 cc_temp_change_exp:					; cooling chamber temperature change timer exceeded	(F44)
-	; TODO call cc_lights_dis
+	call cc_light_dis
 	ldd temp,			y+5			; fetch $105 flags
 	andi temp, 			0xef		; clear F43 flag
 	std y+5,			temp		; store $105 flags
 	ret
 cc_hum_change_exp:					; cooling chamber humidity change timer exceeded	(F46)
-	; TODO call cc_lights_dis
+	call cc_light_dis
 	ldd temp,			y+5			; fetch $105 flags
 	andi temp, 			0xfe		; clear F45 flag
 	std y+5,			temp		; store $105 flags
 	ret
 cc_pres_change_exp:					; cooling chamber pressure change timer exceeded	(F48)
-	; TODO call cc_lights_dis
+	call cc_lights_dis
 	ldd temp,			y+6			; fetch $106 flags
 	andi temp, 			0xdf		; clear F47 flag
 	std y+6,			temp		; store $106 flags
 	ret
 fc_mode_change_exp:					; freezing chamber mode change timer exceeded		(F55)
-	; TODO call fc_lights_dis
+	call fc_light_dis
 	ldd temp,			y+7			; fetch $107 flags
 	andi temp, 			0xbf		; clear F54 flag
 	std y+7,			temp		; store $107 flags
 	ret
 fc_temp_change_exp:					; freezing chamber temperature change timer exceeded(F57)
-	;TODO call fc_lights_dis
+	call fc_light_dis
 	ldd temp,			y+7			; fetch $107 flags
 	andi temp, 			0xf7		; clear F56 flag
 	std y+7,			temp		; store $107 flags
 	ret
 fc_hum_change_exp:					; freezing chamber humidity change timer exceeded	(F59)
-	;TODO call fc_lights_dis
+	call fc_light_dis
 	ldd temp,			y+7			; fetch $107 flags
 	andi temp, 			0xfe		; clear F58 flag
 	std y+7,			temp		; store $107 flags
 	ret
 fc_pres_change_exp:					; freezing chamber pressure change timer exceeded	(F61)
-	;TODO call fc_lights_dis
+	call fc_light_dis
 	ldd temp,			y+8			; fetch $108 flags
 	andi temp, 			0xdf		; clear F60 flag
 	std y+8,			temp		; store $107 flags
@@ -754,4 +745,52 @@ gen_light_dis:						; should have bit mask (not inverted) in temp2
 	neg temp2						; negate temp2
 	and temp,			temp2		; reset bits by inverted mask
 	out porta,			temp
+	ret
+cc_light_en:
+	ldi temp2,	0x01		; 0-bit mask
+	call gen_light_en		; enable cc light
+	ret
+cc_light_dis:
+	ldi temp2,	0x01		; 0-bit mask
+	call gen_light_dis		; disable cc light
+	ret
+fc_light_en:
+	ldi temp2,	0x02		; 1-bit mask
+	call gen_light_en		; enable fc light
+	ret
+fc_light_dis:
+	ldi temp2,	0x02		; 1-bit mask
+	call gen_light_dis		; disable fc light
+	ret
+red_light_en:
+	ldi temp2,	0x04		; 2-bit mask
+	call gen_light_en		; enable red light
+	ret
+red_light_dis:
+	ldi temp2,	0x04		; 2-bit mask
+	call gen_light_dis		; disable red light
+	ret
+green_light_en:
+	ldi temp2,	0x08		; 3-bit mask
+	call gen_light_en		; enable green light
+	ret
+green_light_dis:
+	ldi temp2,	0x08		; 3-bit mask
+	call gen_light_dis		; disable green light
+	ret
+blue_light_en:
+	ldi temp2,	0x10		; 4-bit mask
+	call gen_light_en		; enable blue light
+	ret
+blue_light_dis:
+	ldi temp2,	0x10		; 4-bit mask
+	call gen_light_dis		; disable blue light
+	ret
+yellow_light_en:
+	ldi temp2,	0x20		; 5-bit mask
+	call gen_light_en		; enable yellow light
+	ret
+yellow_light_dis:
+	ldi temp2,	0x20		; 5 bit mask
+	call gen_light_dis		; disable yellow light
 	ret
