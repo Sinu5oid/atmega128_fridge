@@ -1,4 +1,5 @@
 .include "m128def.inc"
+.include "labels.asm"
 								; cooling chamber 	- cc
 								; freezing chamber 	- fc
 .def temp		= r16			; temporary buffer register
@@ -26,7 +27,7 @@
 	jmp start
 .org 0x1c						; t/c1 ovf vector
 	jmp inttc1					
-.org 0x36						; first cseg address (no not interfere with interrupt vectors)
+.org 0x46						; first cseg address (no not interfere with interrupt vectors)
 start:
 	ldi temp,	LOW(RAMEND)
 	out spl,	temp			; move stack pointer (lower part)
@@ -36,6 +37,7 @@ start:
 	call flags_init				; set all flags to 0
 	call timers_init			; set timers to initial values
 	call ports_init				; set ports data direction registers to initial values
+	call time_restore			; load current time from data
 	ldi temp,	0x04
 	out timsk, 	temp			; enable local interrupt by t/c1 overflow
 	call tc1restore				; set timer/counter 1 (16-byte clk/1024 prescaler ~100ms @16MHz, ~200ms @4Mhz)
@@ -248,11 +250,82 @@ timers_init:
 	ldi temp,	0xf6
 	ldi xh,		0x01
 	ldi xl,		0x14
-til:st x+,		temp			; clear $114 up to 11b
-	cpi xl,		0x1c
+til:st x+,		temp			; clear $114 up to 11c
+	cpi xl,		0x1d
 	brne til
-	ldi temp,	0xf6
-	mov cnt_100ms,	temp		; cnt_100ms
+	ret
+time_restore:
+	clr temp
+	lds temp,			time_h			; load hours count from memory
+	cpi temp,			0xff			; check if it's set (not an ff)
+	breq				invalid_time
+	; hours (complete)
+	mov cnt_hours,		temp			; time set, copy hours
+	; hours from parts
+	lds temp,			time_hp			; load hours parted from memory
+	mov temp2,			temp			; copy value to get higher part
+	lsr temp2
+	lsr temp2
+	lsr temp2
+	lsr temp2
+	andi temp,			0x0f			; get lower part
+	mov cnt_hours_l,	temp
+	mov cnt_hours_h,	temp2
+	; minutes from parts
+	lds temp,			time_mp			; load minutes parted from memory
+	mov temp2,			temp			; copy value to get higher part
+	lsr temp2
+	lsr temp2
+	lsr temp2
+	lsr temp2
+	andi temp,			0x0f			; get lower part
+	mov cnt_mnt_l,		temp
+	mov cnt_mnt_h,		temp2
+	; seconds from parts
+	lds temp,			time_sp			; load seconds parted from memory
+	mov temp2,			temp			; copy value to get higher part
+	lsr temp2
+	lsr temp2
+	lsr temp2
+	lsr temp2
+	andi temp,			0x0f			; get lower part
+	mov cnt_sec_l,		temp
+	mov cnt_sec_h,		temp2
+	; set ovf 100ms counter to it's default
+	ldi temp,			0xf6
+	mov cnt_100ms,		temp			; cnt_100ms
+	ret
+invalid_time:
+	clr temp
+	sts time_h,			temp
+	sts time_hp,		temp
+	sts time_mp,		temp
+	sts time_sp,		temp
+	jmp time_restore					; loop over and read defaults
+	ret
+time_store:
+	sts time_h,			cnt_hours		; store common hours
+	mov temp,			cnt_hours_h		; prepare hours parted
+	lsl temp
+	lsl temp
+	lsl temp
+	lsl temp
+	add temp,			cnt_hours_l
+	sts time_hp,		temp			; store hours parted
+	mov temp,			cnt_mnt_h		; prepare minutes parted
+	lsl temp
+	lsl temp
+	lsl temp
+	lsl temp
+	add temp,			cnt_mnt_l
+	sts time_mp,		temp			; store minutes parted
+	mov temp,			cnt_sec_h		; prepare seconds parted
+	lsl temp
+	lsl temp
+	lsl temp
+	lsl temp
+	add temp,			cnt_sec_l
+	sts time_sp,		temp			; store seconds parted
 	ret
 ports_init:
 	ldi temp,	0x3f			; 0..5 bits for Write, 6..7 for read
@@ -533,7 +606,9 @@ add_hours: inc cnt_hours_l
 		jmp rtt_reset				; if hours_l is not equal to 10 (no ovf)
 	clr cnt_hours_l
 	inc cnt_hours_h
-rtt_reset: ldd temp,	y+3			; load $103 flags
+rtt_reset:
+	call time_store
+	ldd temp,	y+3					; load $103 flags
 	andi temp,			0x7f		; clear T1 flag (t/c1 ovf)
 	std	y+3,			temp		; store $103 flags
 	ret
@@ -683,8 +758,12 @@ ac_8:cpi key_id,		0x08		; compare id with 8 (if FC pressure select key has been 
 	ori temp,			0x01		; set PT15
 	std y+11, 			temp		; store $10B flags
 	ret
-ac_9:cpi key_id,		0x09		; compare id with 9 (if pause or number key has been pressed)
+ac_9:cpi key_id,		0x09		; compare id with 9 (if pause key has been pressed)
 	brbc 1,				ac_ac		; jmp to after key check
+	cpi key_id,			0x0a		; compare id with 10 (if number key has been pressed)
+	brbc 1,				ac_ac		; jmp to after key check
+	cpi key_id,			0x0b		; compare id with 11 (if time set key has been pressed)
+	brbc 1,				ac_ac		; jump to after key check
 ac_ac:ret
 	ret
 cc_mode_change_exp:					; cooling chamber mode change timer exceeded 		(F42)
@@ -706,7 +785,7 @@ cc_hum_change_exp:					; cooling chamber humidity change timer exceeded	(F46)
 	std y+5,			temp		; store $105 flags
 	ret
 cc_pres_change_exp:					; cooling chamber pressure change timer exceeded	(F48)
-	call cc_lights_dis
+	call cc_light_dis
 	ldd temp,			y+6			; fetch $106 flags
 	andi temp, 			0xdf		; clear F47 flag
 	std y+6,			temp		; store $106 flags
